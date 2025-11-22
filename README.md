@@ -45,13 +45,13 @@ pip install -Ue .
 cd ..
 ```
 We also provide a full Conda environment file (`environment.yml`) for users who encounter dependency issues.
-### Data Preparation
 
-## 📦 Dataset & Checkpoints
+
+### 📦 Dataset & Checkpoints
 
 The HypSeek project provides complete training data, test datasets, and all pretrained / finetuned model checkpoints.
 
-### 📂 Datasets
+#### 📂 Datasets
 
 The following datasets are included in the project root directory:
 
@@ -68,11 +68,11 @@ HypSeek/
 
 ---
 
-### 🧩 Model Checkpoints
+#### 🧩 Model Checkpoints
 
 We release both pre-trained weights and downstream-task finetuned models.
 
-#### 1. `pretrain.zip` — Pre-trained Checkpoints
+##### 1. `pretrain.zip` — Pre-trained Checkpoints
 
 Contains the pretrained model weights used before downstream finetuning. Extract under:
 
@@ -80,7 +80,7 @@ Contains the pretrained model weights used before downstream finetuning. Extract
 HypSeek/pretrain/
 ```
 
-#### 2. Finetuned Checkpoints (`Checkpoints/` directory)
+##### 2. Finetuned Checkpoints (`Checkpoints/` directory)
 
 | File | Purpose |
 |------|---------|
