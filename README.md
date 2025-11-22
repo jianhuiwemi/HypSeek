@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![arXiv](https://img.shields.io/badge/arXiv-2506.05768-b31b1b.svg)](https://arxiv.org/abs/2508.15480)
+[![arXiv](https://img.shields.io/badge/arXiv-2508.15480-b31b1b.svg)](https://arxiv.org/abs/2508.15480)
 [![NeurIPS 2025](https://img.shields.io/badge/NeurIPS-2025-blue.svg)](https://neurips.cc/virtual/2025/poster/117847)
 [![OpenReview](https://img.shields.io/badge/OpenReview-TUh4GDposM-8c1b13.svg)](https://openreview.net/forum?id=TUh4GDposM)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
