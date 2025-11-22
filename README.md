@@ -64,8 +64,6 @@ HypSeek/
  └── test_datasets/
 ```
 
----
-
 ### 🧩 Model Checkpoints
 
 We release both pre-trained weights and downstream-task finetuned models.
@@ -107,8 +105,6 @@ bash test.sh PCBA three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 ```bash
 bash test.sh DEKOIS three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 ```
-
----
 
 ### ⚡ Run Affinity Ranking (FEP)
 
