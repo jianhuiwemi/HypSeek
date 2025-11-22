@@ -12,7 +12,7 @@
   <img src="figures/hypseek.jpg" width="700"/>
 </p>
 
-# 🚀 Quick Start
+# Quick Start
 
 ## ⚙ Installization
 
