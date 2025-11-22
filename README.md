@@ -9,10 +9,6 @@
 
 </div>
 
-<p align="center">
-  <img src="https://atomlab.yanyanlan.com/image/aanet_atom_lab.png" alt="AANet Architecture" width="800"/>
-</p>
-
 ---
 
 ## 📌 Overview
