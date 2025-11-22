@@ -14,7 +14,7 @@
 
 # 🚀 Quick Start
 
-## Installization
+## ⚙ Installization
 
 Clone the repository:
 ```bash
