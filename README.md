@@ -84,7 +84,7 @@ HypSeek/pretrain/
 
 | File | Purpose |
 |------|---------|
-| `checkpoint_avg_41-50_rk.pt` | **Affinity Ranking** model |
+| `checkpoint_avg_41-50_rk.pt` | **Affinity Ranking** |
 | `checkpoint_avg_41-50_vs.pt` | **Virtual Screening** |
 
 ## 🔧 Usage
