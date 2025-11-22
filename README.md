@@ -9,8 +9,6 @@
 
 </div>
 
----
-
 ## 📌 Overview
 
 AANet is a deep learning framework for **structure-based virtual screening** that addresses structural uncertainty in protein pockets through a novel **two-phase alignment and aggregation strategy**. 
