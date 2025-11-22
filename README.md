@@ -12,35 +12,39 @@
   <img src="figures/hypseek.jpg" width="700"/>
 </p>
 
-## 📌 Overview
-
-AANet is a deep learning framework for **structure-based virtual screening** that addresses structural uncertainty in protein pockets through a novel **two-phase alignment and aggregation strategy**. 
-
-### Key Features
-
-- 🎯 **Handles Structural Uncertainty**: Effectively deals with multiple potential pocket candidates.
-- 🔄 **Two-Phase Training**: Tri-modal alignment phase for pocket identification + Aggregation phase for learning from pocket-agnostic activity data (such as ChEMBL).
-- 🏆 **State-of-the-Art Performance**: Superior results on DUD-E, LIT-PCBA and other benchmarks
-- 🧬 **Flexible Input**: Works with holo, apo, and AlphaFold2-predicted structures
-
 ## 🚀 Quick Start
 
-### Requirements
+### Installization
 
-Same dependencies as [Uni-Mol](https://github.com/dptech-corp/Uni-Mol/tree/main/unimol). Install additional packages:
-
+Clone the repository:
 ```bash
-pip install zstandard rdkit-pypi==2022.9.3
+git clone https://github.com/jianhuiwemi/HypSeek.git
+cd HypSeek
 ```
-
-**Alternative**: Run in the Docker environment of [Unicore](https://hub.docker.com/layers/dptechnology/unicore/0.0.1-pytorch1.11.0-cuda11.3/images/sha256-6210fae21cdf424f10ba51a118a8bcda90d927822e1fea0070f87cb4d5f2a6d2):
-
+Install OpenBabel:
 ```bash
-docker pull dptechnology/unicore:0.0.1-pytorch1.11.0-cuda11.3
-docker run -it --gpus all dptechnology/unicore:0.0.1-pytorch1.11.0-cuda11.3
-pip install zstandard rdkit-pypi==2022.9.3
+apt-get install -y openbabel
 ```
-
+Install Python packages:
+```bash
+pip install numpy scikit-bio==0.6.2 rdkit biopandas
+```
+Install Uni-Core:
+```bash
+git clone https://github.com/dptech-corp/Uni-Core.git
+cd Uni-Core
+python setup.py install
+cd ..
+```
+Install ProDy:
+```bash
+git clone https://github.com/prody/ProDy.git
+cd ProDy
+python setup.py build_ext --inplace --force
+pip install -Ue .
+cd ..
+```
+We also provide a full Conda environment file (`environment.yml`) for users who encounter dependency issues.
 ### Data Preparation
 
 #### 📦 Model Checkpoint
