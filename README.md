@@ -96,14 +96,9 @@ Use the **VS checkpoint** (`checkpoint_avg_41-50_vs.pt`) for:
 bash test.sh DUDE three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 ```
 
-**PCBA**
+**LIT-PCBA**
 ```bash
 bash test.sh PCBA three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
-```
-
-**DEKOIS**
-```bash
-bash test.sh DEKOIS three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 ```
 
 ### ⚡ Run Affinity Ranking (FEP)
