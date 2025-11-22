@@ -89,7 +89,7 @@ HypSeek can be directly evaluated using the provided `test.sh` script.
 
 ### ⚡ Run Virtual Screening
 
-Use the **VS checkpoint** (`checkpoint_avg_41-50_vs.pt`) for:
+Use the **Screening checkpoint** (`checkpoint_avg_41-50_vs.pt`) for:
 
 **DUD-E**
 ```bash
@@ -101,8 +101,7 @@ bash test.sh DUDE three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 bash test.sh PCBA three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 ```
 
-### ⚡ Run Affinity Ranking (FEP)
-
+### ⚡ Run Affinity Ranking
 Use the **Ranking checkpoint** (`checkpoint_avg_41-50_rk.pt`) for FEP:
 
 ```bash
