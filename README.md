@@ -85,70 +85,44 @@ HypSeek/pretrain/
 | `checkpoint_avg_41-50_rk.pt` | **Affinity Ranking** |
 | `checkpoint_avg_41-50_vs.pt` | **Virtual Screening** |
 
-## 🔧 Usage
+## 🚀 Quick Start
 
-### Training
+After preparing the environment and downloading the datasets/checkpoints, you can directly run evaluation on supported benchmarks using the provided `test.sh` script.
 
-AANet uses a **two-phase training strategy**:
+### ▶ Run Virtual Screening
 
-#### Phase 1: Alignment (Representation Learning)
+Use the **virtual screening checkpoint** (`checkpoint_avg_41-50_vs.pt`):
+
+**DUD-E**
 ```bash
-bash fpocket_neg_10A_siglip.sh
+bash test.sh DUDE three_hybrid_model /path/to/checkpoint_avg_41-50_vs.pt ./results
 ```
 
-#### Phase 2: Aggregation (Pocket Selection)
+**LIT-PCBA**
 ```bash
-bash finetune_chembl_fpocket_neg_10A_siglip_icrossatt_mollinear_wocollision_attn_kl.sh
+bash test.sh PCBA three_hybrid_model /path/to/checkpoint_avg_41-50_vs.pt ./results
 ```
 
-> **Note**: Modify the **conda environment** and paths in the scripts, or run in the Unicore Docker environment.
-
-### Evaluation
-
-Run evaluation on different benchmarks:
-
+**DEKOIS**
 ```bash
-# DUD-E benchmark
-bash test_finetune_chembl_fpocket_neg_10A_siglip_icrossatt_mollinear_wocollision_attn_kl.sh <device_id> DUDE
-
-# LIT-PCBA benchmark
-bash test_finetune_chembl_fpocket_neg_10A_siglip_icrossatt_mollinear_wocollision_attn_kl.sh <device_id> PCBA
+bash test.sh DEKOIS three_hybrid_model /path/to/checkpoint_avg_41-50_vs.pt ./results
 ```
 
-Results will be saved in the `./test` directory.
+---
 
-## 📈 Performance
+### ▶ Run Affinity Ranking
 
-AANet achieves state-of-the-art performance on multiple virtual screening benchmarks by effectively handling structural uncertainty in protein pockets.
+Use the **ranking checkpoint** (`checkpoint_avg_41-50_rk.pt`):
 
-## 📝 Citation
-
-If you find this work useful in your research, please cite:
-
-```bibtex
-@inproceedings{zhu_aanet_2025,
-    title = {{AANet}: {Virtual} {Screening} under {Structural} {Uncertainty} via {Alignment} and {Aggregation}},
-    booktitle = {Proceedings of the Thirty-Ninth Annual Conference on Neural Information Processing Systems (NeurIPS 2025)},
-    url = {https://openreview.net/forum?id=TUh4GDposM},
-    author = {Zhu, Wenyu and Wang, Jianhui and Gao, Bowen and Jia, Yinjun and Tan, Haichuan and Zhang, Ya-Qin and Ma, Wei-Ying and Lan, Yanyan},
-    year = {2025},
-}
+**FEP Benchmark**
+```bash
+bash test.sh FEP three_hybrid_model /path/to/checkpoint_avg_41-50_rk.pt ./results
 ```
 
-## 📄 License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**Note:**  
+- Replace `/path/to/xxx.pt` with the actual checkpoint path (e.g., `Checkpoints/checkpoint_avg_41-50_vs.pt`).  
+- Results will be saved under the specified output folder (e.g., `./results`).  
 
-**Copyright (c) 2025 Institute for AI Industry Research (AIR), Tsinghua University**
 
-Portions of this code are adapted from projects developed by DP Technology, licensed under the MIT License.
-
-## 💐 Acknowledgments
-
-This work builds upon [Uni-Mol](https://github.com/dptech-corp/Uni-Mol) and [Unicore](https://github.com/dptech-corp/Uni-Core). We thank the authors for their open-source contributions.
-
-## 📧 Contact
-
-For questions or collaborations, please contact:
-- Wenyu Zhu: [GitHub](https://github.com/Wiley-Z)
-- Yanyan Lan: [Homepage](https://air.tsinghua.edu.cn/en/info/1046/1194.htm)
