@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  <img src="figures/hypseek.jpg">
+  <img src="figures/hypseek.jpg" width="700"/>
 </p>
 
 ## 📌 Overview
