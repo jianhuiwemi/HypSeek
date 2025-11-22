@@ -74,8 +74,7 @@ We release both pre-trained weights and downstream-task finetuned models.
 
 #### 1. `pretrain.zip` — Pre-trained Checkpoints
 
-Contains the pretrained model weights used before downstream finetuning.  
-Extract under:
+Contains the pretrained model weights used before downstream finetuning. Extract under:
 
 ```
 HypSeek/pretrain/
@@ -85,21 +84,8 @@ HypSeek/pretrain/
 
 | File | Purpose |
 |------|---------|
-| `checkpoint_avg_41-50_rk.pt` | **Affinity Ranking** model — predict & rank ligand–protein binding affinity |
-| `checkpoint_avg_41-50_vs.pt` | **Virtual Screening** model — screen large compound libraries |
-
-Directory structure:
-
-```
-HypSeek/
- ├── Checkpoints/
- │     ├── checkpoint_avg_41-50_rk.pt
- │     └── checkpoint_avg_41-50_vs.pt
- ├── pretrain.zip
- ├── data.zip
- ├── test_datasets.zip
- └── ...
-```
+| `checkpoint_avg_41-50_rk.pt` | **Affinity Ranking** model |
+| `checkpoint_avg_41-50_vs.pt` | **Virtual Screening** |
 
 ## 🔧 Usage
 
