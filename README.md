@@ -8,6 +8,12 @@
 
 </div>
 
+<p align="center">
+  <img src="https://atomlab.yanyanlan.com/image/hypseek_atom_lab.png" alt="AANet Architecture" width="800"/>
+</p>
+
+---
+
 ## 📌 Overview
 
 AANet is a deep learning framework for **structure-based virtual screening** that addresses structural uncertainty in protein pockets through a novel **two-phase alignment and aggregation strategy**. 
