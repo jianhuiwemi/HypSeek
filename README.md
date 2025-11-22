@@ -87,42 +87,36 @@ HypSeek/pretrain/
 
 ## 🚀 Quick Start
 
-After preparing the environment and downloading the datasets/checkpoints, you can directly run evaluation on supported benchmarks using the provided `test.sh` script.
+HypSeek can be directly evaluated using the provided `test.sh` script.
 
-### ▶ Run Virtual Screening
+### ⚡ Run Virtual Screening
 
-Use the **virtual screening checkpoint** (`checkpoint_avg_41-50_vs.pt`):
+Use the **VS checkpoint** (`checkpoint_avg_41-50_vs.pt`) for:
 
 **DUD-E**
 ```bash
-bash test.sh DUDE three_hybrid_model /path/to/checkpoint_avg_41-50_vs.pt ./results
+bash test.sh DUDE three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 ```
 
-**LIT-PCBA**
+**PCBA**
 ```bash
-bash test.sh PCBA three_hybrid_model /path/to/checkpoint_avg_41-50_vs.pt ./results
+bash test.sh PCBA three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 ```
 
 **DEKOIS**
 ```bash
-bash test.sh DEKOIS three_hybrid_model /path/to/checkpoint_avg_41-50_vs.pt ./results
+bash test.sh DEKOIS three_hybrid_model /path/checkpoint_avg_41-50_vs.pt ./results
 ```
 
 ---
 
-### ▶ Run Affinity Ranking
+### ⚡ Run Affinity Ranking (FEP)
 
-Use the **ranking checkpoint** (`checkpoint_avg_41-50_rk.pt`):
+Use the **Ranking checkpoint** (`checkpoint_avg_41-50_rk.pt`) for FEP:
 
-**FEP Benchmark**
 ```bash
-bash test.sh FEP three_hybrid_model /path/to/checkpoint_avg_41-50_rk.pt ./results
+bash test.sh FEP three_hybrid_model /path/checkpoint_avg_41-50_rk.pt ./results
 ```
 
----
-
-**Note:**  
-- Replace `/path/to/xxx.pt` with the actual checkpoint path (e.g., `Checkpoints/checkpoint_avg_41-50_vs.pt`).  
-- Results will be saved under the specified output folder (e.g., `./results`).  
 
 
