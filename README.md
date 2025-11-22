@@ -47,18 +47,59 @@ cd ..
 We also provide a full Conda environment file (`environment.yml`) for users who encounter dependency issues.
 ### Data Preparation
 
-#### 📦 Model Checkpoint
+## 📦 Dataset & Checkpoints
 
-Download the trained model checkpoint from [Google Drive](https://drive.google.com/file/d/11Hixd7vVKg6RZcZ81LEXKWoc68p61csV) and place it in:
+The HypSeek project provides complete training data, test datasets, and all pretrained / finetuned model checkpoints.
+
+### 📂 Datasets
+
+The following datasets are included in the project root directory:
+
+- `data.zip` — Training dataset  
+- `test_datasets.zip` — Testing / benchmark datasets  
+
+After downloading, extract them under the project root:
+
 ```
-savedir/finetune_chembl_fpocket_neg_10A_siglip_icrossatt_mollinear_wocollision_attn_kl/
+HypSeek/
+ ├── data/
+ └── test_datasets/
 ```
 
-#### 📊 Test Datasets
+---
 
-- **DUD-E**: `dataset/dude_apo/` contains the 38-target subset with holo, AlphaFold2, and apo structures
-- **LIT-PCBA**: `dataset/lit_pcba/` contains pocket data for 12-target subset
-- **Molecules**: Download from [DrugCLIP](https://drive.google.com/drive/folders/1zW1MGpgunynFxTKXC2Q4RgWxZmg6CInV) and decompress into `dataset/`
+### 🧩 Model Checkpoints
+
+We release both pre-trained weights and downstream-task finetuned models.
+
+#### 1. `pretrain.zip` — Pre-trained Checkpoints
+
+Contains the pretrained model weights used before downstream finetuning.  
+Extract under:
+
+```
+HypSeek/pretrain/
+```
+
+#### 2. Finetuned Checkpoints (`Checkpoints/` directory)
+
+| File | Purpose |
+|------|---------|
+| `checkpoint_avg_41-50_rk.pt` | **Affinity Ranking** model — predict & rank ligand–protein binding affinity |
+| `checkpoint_avg_41-50_vs.pt` | **Virtual Screening** model — screen large compound libraries |
+
+Directory structure:
+
+```
+HypSeek/
+ ├── Checkpoints/
+ │     ├── checkpoint_avg_41-50_rk.pt
+ │     └── checkpoint_avg_41-50_vs.pt
+ ├── pretrain.zip
+ ├── data.zip
+ ├── test_datasets.zip
+ └── ...
+```
 
 ## 🔧 Usage
 
