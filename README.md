@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  <img src="https://atomlab.yanyanlan.com/image/hypseek_atom_lab.png" alt="AANet Architecture" width="800"/>
+  <img src="figures/hypseek.png">
 </p>
 
 ---
