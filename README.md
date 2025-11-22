@@ -49,7 +49,7 @@ We also provide a full Conda environment file (`environment.yml`) for users who 
 
 ### 📦 Dataset & Checkpoints
 
-The HypSeek project provides complete training data, test datasets, and all pretrained / finetuned model checkpoints.
+We provide complete training data, test datasets, and all pretrained / finetuned model checkpoints. Please download them from [this link](https://drive.google.com/drive/folders/1uQNrN3tu0mrI1hhncu2MiKV7AYkqPslN?dmr=1&ec=wgc-drive-globalnav-goto).
 
 #### 📂 Datasets
 
