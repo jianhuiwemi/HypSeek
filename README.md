@@ -150,6 +150,6 @@ This work builds upon [Uni-Mol](https://github.com/dptech-corp/Uni-Mol), [Unicor
 ## 📬 Contact
 
 For any questions or collaboration requests, please contact:
-**Jianhui Wang**  
+
 📧 Email: [jianhuiwang309@gmail.com](mailto:jianhuiwang309@gmail.com)
 
