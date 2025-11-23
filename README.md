@@ -108,5 +108,23 @@ Use the **Ranking checkpoint** (`checkpoint_avg_41-50_rk.pt`) for FEP:
 bash test.sh FEP three_hybrid_model /path/checkpoint_avg_41-50_rk.pt ./results
 ```
 
+## 🏋️ Training
 
+We provide a unified training script (`train.sh`). You may train either the **Virtual Screening (VS)** model or the **Affinity Ranking (RK)** model depending on the validation set used.
+
+### 🔥 Train Virtual Screening Model
+
+Use the **CASF** validation set:
+
+```bash
+bash train.sh CASF
+```
+
+### 🔥 Train Affinity Ranking Model
+
+Use the **FEP** validation set:
+
+```bash
+bash train.sh FEP
+```
 
