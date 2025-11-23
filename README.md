@@ -145,8 +145,7 @@ If you find this work useful in your research, please cite:
 
 ## 💐 Acknowledgments
 
-This work builds upon [Uni-Mol](https://github.com/dptech-corp/Uni-Mol), [Uni-Core](https://github.com/dptech-corp/Uni-Core), and [LigUnity](https://github.com/IDEA-XL/LigUnity).  
-We especially thank the LigUnity team for providing their data resources, and we thank all authors for their open-source contributions.
+This work builds upon [Uni-Mol](https://github.com/dptech-corp/Uni-Mol), [Uni-Core](https://github.com/dptech-corp/Uni-Core), and [LigUnity](https://github.com/IDEA-XL/LigUnity). We especially thank the LigUnity team for providing their data resources, and we thank all authors for their open-source contributions.
 
 ## 📬 Contact
 
