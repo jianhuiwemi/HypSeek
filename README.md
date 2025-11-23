@@ -127,4 +127,30 @@ Use the **FEP** validation set:
 ```bash
 bash train.sh FEP
 ```
+## 📚 Citation
+
+If you find this work useful in your research, please cite:
+
+```bibtex
+@misc{wang2025learningproteinligandbindinghyperbolic,
+      title={Learning Protein-Ligand Binding in Hyperbolic Space}, 
+      author={Jianhui Wang and Wenyu Zhu and Bowen Gao and Xin Hong and Ya-Qin Zhang and Wei-Ying Ma and Yanyan Lan},
+      year={2025},
+      eprint={2508.15480},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2508.15480}, 
+}
+```
+
+## 💐 Acknowledgments
+
+This work builds upon [Uni-Mol](https://github.com/dptech-corp/Uni-Mol), [Unicore](https://github.com/dptech-corp/Uni-Core), and [LigUnity](https://github.com/IDEA-XL/LigUnity). We thank the authors for their open-source contributions.
+
+## 📬 Contact
+
+For any questions or collaboration requests, please contact:
+
+**Jianhui Wang**  
+📧 Email: [jianhuiwang309@gmail.com](mailto:jianhuiwang309@gmail.com)
 
