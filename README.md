@@ -145,11 +145,15 @@ If you find this work useful in your research, please cite:
 
 ## 💐 Acknowledgments
 
-This work builds upon [Uni-Mol](https://github.com/dptech-corp/Uni-Mol), [Unicore](https://github.com/dptech-corp/Uni-Core), and [LigUnity](https://github.com/IDEA-XL/LigUnity). We thank the authors for their open-source contributions.
+This work builds upon [Uni-Mol](https://github.com/dptech-corp/Uni-Mol),  
+[Uni-Core](https://github.com/dptech-corp/Uni-Core), and  
+[LigUnity](https://github.com/IDEA-XL/LigUnity), from which our dataset and several processing components are derived.  
+We especially thank the LigUnity team for providing their data resources, and we thank all authors for their open-source contributions.
 
 ## 📬 Contact
 
-For any questions or collaboration requests, please contact:
+For any questions or collaboration requests, please contact Jianhui:
 
 📧 Email: [jianhuiwang309@gmail.com](mailto:jianhuiwang309@gmail.com)
+
 
