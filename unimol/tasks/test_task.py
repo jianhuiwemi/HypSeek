@@ -1146,7 +1146,7 @@ class ContrasRankTest(UnicoreTask):
         from scipy.stats import pearsonr, spearmanr
         from sklearn.metrics import accuracy_score, roc_auc_score
 
-        bench_root = "/path/bench"
+        bench_root = "/path/test_datasets/bench"
         fep_csv    = f"{bench_root}/fep/{target}/result_dG.csv"
         jacs_fp    = f"{bench_root}/jacs_set/{target}_edges.csv"
         merck_fp   = f"{bench_root}/merck/{target}_edges.csv"
