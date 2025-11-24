@@ -40,12 +40,7 @@ class ThreeHybridModel(BaseUnicoreModel):
             default=1,
             help="recycling nums of decoder",
         )
-
-
         parser.add_argument("--aperture-eta", type=float, default=1.2)
-        parser.add_argument("--alpha-rank", type=float, default=1.0)
-        parser.add_argument("--alpha-corr", type=float, default=0.0)
-        parser.add_argument("--gamma-ce", type=float, default=1.0)
         parser.add_argument("--curv-init", type=float, default=1.0, help="initial curv")
         parser.add_argument("--learn-curv", action="store_true", help="learnable")
 
@@ -59,7 +54,6 @@ class ThreeHybridModel(BaseUnicoreModel):
         self.pocket_model = UniMolModel(args.pocket, pocket_dictionary)
         self.tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t12_35M_UR50D", use_fast=False)
         self.protein_model = AutoModelForMaskedLM.from_pretrained("facebook/esm2_t12_35M_UR50D")
-
 
         self.logit_scale = nn.Parameter(torch.ones([1], device="cuda") * np.log(13))
         self.mol_project = NonLinearHead(
@@ -126,22 +120,25 @@ class ThreeHybridModel(BaseUnicoreModel):
         self.protein_alpha.data = torch.clamp(self.protein_alpha.data, max=0.0)
         self.curv.data = torch.clamp(self.curv.data, **self._curv_minmax)
         κ = self.curv.exp()
+        # ——— Mol ———
         mol_padding_mask = mol_src_tokens.eq(self.mol_model.padding_idx)
         mol_x = self.mol_model.embed_tokens(mol_src_tokens)
         mol_graph_attn_bias = self.get_dist_features(mol_src_distance, mol_src_edge_type, "mol")
         mol_outputs = self.mol_model.encoder(mol_x, padding_mask=mol_padding_mask, attn_mask=mol_graph_attn_bias)
         mol_rep_eu = mol_outputs[0][:, 0, :]
-        u_mol = self.mol_project(mol_rep_eu)  
-        u_mol = u_mol * self.mol_alpha.exp()  
+        u_mol = self.mol_project(mol_rep_eu)  # [B_m, 128]
+        u_mol = u_mol * self.mol_alpha.exp()  # [B_m, 128]
 
+        # ——— Pocket ———
         poc_padding_mask = pocket_src_tokens.eq(self.pocket_model.padding_idx)
         poc_x = self.pocket_model.embed_tokens(pocket_src_tokens)
         poc_graph_attn_bias = self.get_dist_features(pocket_src_distance, pocket_src_edge_type, "pocket")
         poc_outputs = self.pocket_model.encoder(poc_x, padding_mask=poc_padding_mask, attn_mask=poc_graph_attn_bias)
         poc_rep_eu = poc_outputs[0][:, 0, :]
-        u_poc = self.pocket_project(poc_rep_eu)  
-        u_poc = u_poc * self.pocket_alpha.exp()  
+        u_poc = self.pocket_project(poc_rep_eu)  # [B_c, 128]
+        u_poc = u_poc * self.pocket_alpha.exp()  # [B_c, 128]
 
+        # ——— Protein ———
         inputs = self.tokenizer(
             protein_sequences, return_tensors="pt", padding="longest", truncation=True, max_length=512
         )
@@ -150,14 +147,13 @@ class ThreeHybridModel(BaseUnicoreModel):
         prot_outputs = self.protein_model(**inputs, output_hidden_states=True)
         prot_hidden_states = prot_outputs.hidden_states[-1]
         prot_rep_eu = prot_hidden_states[:, 0, :]
-        u_prot = self.protein_project(prot_rep_eu)  
-        u_prot = u_prot * self.protein_alpha.exp()  
+        u_prot = self.protein_project(prot_rep_eu)  # [B_pr, 128]
+        u_prot = u_prot * self.protein_alpha.exp()  # [B_pr, 128]
 
         with torch.autocast(u_mol.device.type, dtype=torch.float32):
             h_mol = exp_map0(u_mol, κ)   
-            h_poc = exp_map0(u_poc, κ)   
-            h_prot = exp_map0(u_prot, κ) 
-
+            h_poc = exp_map0(u_poc, κ)  
+            h_prot = exp_map0(u_prot, κ)
         return h_prot, h_poc, h_mol
 
     def set_num_updates(self, num_updates):
@@ -166,7 +162,6 @@ class ThreeHybridModel(BaseUnicoreModel):
     def get_num_updates(self):
         return getattr(self, "_num_updates", 0)
 
-
     def mol_forward(
         self,
         mol_src_tokens,
@@ -174,7 +169,6 @@ class ThreeHybridModel(BaseUnicoreModel):
         mol_src_edge_type,
         **kwargs
     ):
-
         mol_padding_mask = mol_src_tokens.eq(self.mol_model.padding_idx)
         mol_x = self.mol_model.embed_tokens(mol_src_tokens)
         mol_graph_attn_bias = self.get_dist_features(mol_src_distance, mol_src_edge_type, "mol")
@@ -183,11 +177,11 @@ class ThreeHybridModel(BaseUnicoreModel):
             padding_mask=mol_padding_mask,
             attn_mask=mol_graph_attn_bias
         )
-        mol_rep_eu = mol_outputs[0][:, 0, :]  
-        u_mol = self.mol_project(mol_rep_eu)          
-        u_mol = u_mol * self.mol_alpha.exp()           
+        mol_rep_eu = mol_outputs[0][:, 0, :]  # [B_m, hidden]
+        u_mol = self.mol_project(mol_rep_eu)           # [B_m, 128]
+        u_mol = u_mol * self.mol_alpha.exp()           # exp(alpha)
         with torch.autocast(u_mol.device.type, dtype=torch.float32):
-            h_mol = exp_map0(u_mol, self.curv.exp())  
+            h_mol = exp_map0(u_mol, self.curv.exp())   # [B_m, hyp_dim+1]
         return h_mol
 
     def pocket_forward(
@@ -197,7 +191,6 @@ class ThreeHybridModel(BaseUnicoreModel):
         pocket_src_edge_type,
         **kwargs
     ):
-
         poc_padding_mask = pocket_src_tokens.eq(self.pocket_model.padding_idx)
         poc_x = self.pocket_model.embed_tokens(pocket_src_tokens)
         poc_graph_attn_bias = self.get_dist_features(pocket_src_distance, pocket_src_edge_type, "pocket")
@@ -206,12 +199,12 @@ class ThreeHybridModel(BaseUnicoreModel):
             padding_mask=poc_padding_mask,
             attn_mask=poc_graph_attn_bias
         )
-        poc_rep_eu = poc_outputs[0][:, 0, :] 
+        poc_rep_eu = poc_outputs[0][:, 0, :]  # [B_c, hidden]
 
-        u_poc = self.pocket_project(poc_rep_eu)         
-        u_poc = u_poc * self.pocket_alpha.exp()          
+        u_poc = self.pocket_project(poc_rep_eu)           # [B_c, 128]
+        u_poc = u_poc * self.pocket_alpha.exp()           # exp(alpha)
         with torch.autocast(u_poc.device.type, dtype=torch.float32):
-            h_poc = exp_map0(u_poc, self.curv.exp())     
+            h_poc = exp_map0(u_poc, self.curv.exp())      # [B_c, hyp_dim+1]
         return h_poc
 
 
@@ -220,7 +213,6 @@ class ThreeHybridModel(BaseUnicoreModel):
         protein_sequences,
         **kwargs
     ):
-
         inputs = self.tokenizer(
             protein_sequences,
             return_tensors="pt",
@@ -228,7 +220,7 @@ class ThreeHybridModel(BaseUnicoreModel):
             truncation=True,
             max_length=512,
         )
-        device = self.curv.device  
+        device = self.curv.device
         self.protein_model.to(device)
         for k, v in inputs.items():
             inputs[k] = v.to(device)
@@ -236,11 +228,10 @@ class ThreeHybridModel(BaseUnicoreModel):
         prot_outputs = self.protein_model(**inputs, output_hidden_states=True)
         prot_hidden_states = prot_outputs.hidden_states[-1]
         prot_rep_eu = prot_hidden_states[:, 0, :]  
-
-        u_prot = self.protein_project(prot_rep_eu)           
-        u_prot = u_prot * self.protein_alpha.exp()           
+        u_prot = self.protein_project(prot_rep_eu)          
+        u_prot = u_prot * self.protein_alpha.exp()          
         with torch.autocast(u_prot.device.type, dtype=torch.float32):
-            h_prot = exp_map0(u_prot, self.curv.exp())       
+            h_prot = exp_map0(u_prot, self.curv.exp())    
         return h_prot
 
 
@@ -295,10 +286,10 @@ def three_hybrid_architecture(args):
     args.curv_init = getattr(args, "curv_init", 1.0)
     args.learn_curv = getattr(args, "learn_curv", False)
     args.hbce_bounds= getattr(args, "hbce_bounds",[5.0, 7.0, 9.0])
-    args.chl_r0     = getattr(args, "chl_r0",   0.5)   
-    args.chl_dr     = getattr(args, "chl_dr",   0.5)  
-    args.chl_eta0   = getattr(args, "chl_eta0", 0.7)  
-    args.chl_deta   = getattr(args, "chl_deta", 0.2)  
+    args.chl_r0     = getattr(args, "chl_r0",   0.5)
+    args.chl_dr     = getattr(args, "chl_dr",   0.5)
+    args.chl_eta0   = getattr(args, "chl_eta0", 0.7)
+    args.chl_deta   = getattr(args, "chl_deta", 0.2)
     args.lambda_rad = getattr(args, "lambda_rad", 0.5)
     args.lambda_ang = getattr(args, "lambda_ang", 0.5) 
     args.gamma_chl  = getattr(args, "gamma_chl",  0.1) 
