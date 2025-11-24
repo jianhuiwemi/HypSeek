@@ -2,14 +2,10 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 import json
-
-# from IPython import embed as debug_embedded
 import logging
 import os
 import random
 from datetime import datetime
-# from collections.abc import Iterable
-# from sklearn.metrics import roc_auc_score
 from xmlrpc.client import Boolean
 import numpy as np
 import torch
@@ -270,21 +266,13 @@ class pocketscreen(UnicoreTask):
             default=""
         )
 
-        # ========================================================
-        parser.add_argument("--half-aperture-K", type=float, default=0.1, help="half-aperture K")
-        parser.add_argument("--hcc_temp",    type=float, default=0.07, help="hCC softmax ")
-
-        # ======================================================================================
-
     def build_optimizer(self, args, model):
         from torch.optim import AdamW
 
         base_lr = args.lr
         curv_lr = base_lr * 10
-
         curv_params = [p for n, p in model.named_parameters() if n.endswith("curv") and p.requires_grad]
         other_params = [p for n, p in model.named_parameters() if p.requires_grad and not n.endswith("curv")]
-
         return AdamW(
             [
                 {"params": other_params},
@@ -496,8 +484,6 @@ class pocketscreen(UnicoreTask):
         Args:
             split (str): name of the data scoure (e.g., bppp)
         """
-
-
         if self.args.few_shot:
             if self.args.valid_set == "TYK2":
                 return self.load_few_shot_TYK2_FEP_dataset(split, **kwargs)
@@ -527,6 +513,7 @@ class pocketscreen(UnicoreTask):
             pocket_dataset = self.load_pockets_dataset(pocket_data_path, is_train=split=="train")
             pair_label_1 = json.load(open(os.path.join(self.args.data, "train_label_pdbbind_seq.json")))
             pair_label_2 = json.load(open(os.path.join(self.args.data, "train_label_blend_seq_full.json")))
+            test_datasets_root = os.path.join(PROJECT_ROOT, "test_datasets")
             if self.args.valid_set == "TIME":
                 pair_label_2_new = []
                 for assay in pair_label_2:
@@ -571,9 +558,9 @@ class pocketscreen(UnicoreTask):
                 if self.args.valid_set == "CASF":
                     # remove all testset protein by default
                     testset_uniprot_lst = []
-                    testset_uniprot_lst += [x[0] for x in json.load(open(f"{testset_uniport_root}/dude.json"))]
-                    testset_uniprot_lst += [x[0] for x in json.load(open(f"{testset_uniport_root}/PCBA.json"))]
-                    testset_uniprot_lst += [x[0] for x in json.load(open(f"{testset_uniport_root}/dekois.json"))]
+                    testset_uniprot_lst += [x[0] for x in json.load(open(f"{test_datasets_root}/dude.json"))]
+                    testset_uniprot_lst += [x[0] for x in json.load(open(f"{test_datasets_root}/PCBA.json"))]
+                    testset_uniprot_lst += [x[0] for x in json.load(open(f"{test_datasets_root}/dekois.json"))]
 
                     # remove all similar protein
                     if "no_similar_protein" in self.args.save_dir:
@@ -596,14 +583,13 @@ class pocketscreen(UnicoreTask):
                             testset_uniprot_lst_new.append(uniprot)
                         testset_uniprot_lst = testset_uniprot_lst_new
                         print(testset_uniprot_lst)
+
                 else:
                     testset_uniprot_lst = []
 
                 pair_label_2 = [x for x in pair_label_2 if (x["uniprot"] not in testset_uniprot_lst)]
                 print("number of assay after remove test uniport:", len(pair_label_2))
 
-                # using dataset processed by DrugCLIP in 100% similarity threshold
-                # remove all similar protein in PDBBind when testing on No similar protein setting
                 if "no_similar_protein" in self.args.save_dir:
                     old_len = len(pair_label_1)
                     pair_label_1 = [x for x in pair_label_1 if (x["uniprot"] not in testset_uniprot_lst)]
