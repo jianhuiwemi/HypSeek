@@ -9,7 +9,7 @@ from sklearn.metrics import roc_auc_score, precision_score, recall_score, f1_sco
 import numpy as np
 from sklearn.metrics import top_k_accuracy_score
 from rdkit.ML.Scoring.Scoring import CalcBEDROC
-import random
+
 
 
 def calculate_bedroc(y_true, y_score, alpha):
@@ -25,9 +25,12 @@ def calculate_bedroc(y_true, y_score, alpha):
     - BEDROC score
     """
 
+    # concate res_single and labels
     scores = np.expand_dims(y_score, axis=1)
     y_true = np.expand_dims(y_true, axis=1)
+    # print(scores.shape, y_true.shape)
     scores = np.concatenate((scores, y_true), axis=1)
+    # inverse sort scores based on first column
     scores = scores[scores[:, 0].argsort()[::-1]]
     bedroc = CalcBEDROC(scores, 1, 80.5)
     return bedroc
@@ -39,22 +42,20 @@ class ThreeHybridLoss(UnicoreLoss):
         super().__init__(task)
         args = task.args
         self.eta        = float(args.aperture_eta)
-        self.gamma_ce   = float(args.gamma_ce)
         self.alpha_poc  = float(getattr(args, "alpha_poc", 1.0))
         self.alpha_prot = float(getattr(args, "alpha_prot", 1.0))
-        self.chl_r0       = float(args.chl_r0)          
-        self.chl_dr       = float(args.chl_dr)          
+        self.chl_r0       = float(args.chl_r0)           
+        self.chl_dr       = float(args.chl_dr)           
         self.chl_eta0     = float(args.chl_eta0)         
-        self.chl_deta     = float(args.chl_deta)       
-        self.lambda_rad   = float(args.lambda_rad)       
-        self.lambda_ang   = float(args.lambda_ang)      
-        self.gamma_chl    = float(args.gamma_chl)       
+        self.chl_deta     = float(args.chl_deta)         
+        self.lambda_rad   = float(args.lambda_rad)      
+        self.lambda_ang   = float(args.lambda_ang)       
+        self.gamma_chl    = float(args.gamma_chl)        
         self.bounds       = torch.tensor(args.hbce_bounds, dtype=torch.float32)
-        self.lambda_ham = float(getattr(args, "lambda_ham", 0.10))
-        self.lambda_her = float(getattr(args, "lambda_her", 0.10))
+        self.lambda_angu = float(getattr(args, "lambda_angu", 0.10))
+        self.lambda_het = float(getattr(args, "lambda_het", 0.10))
 
     def forward(self, model, sample, reduce=True, fix_encoder=False):
-
         h_prot, h_poc, h_mol = model(
             **sample["pocket"]["net_input"],
             **sample["lig"]["net_input"],
@@ -68,42 +69,34 @@ class ThreeHybridLoss(UnicoreLoss):
         logit_scale = model.logit_scale.exp().detach()
 
 
-        # ====== H² Cone-Hierarchy Loss ======
-        poc_space = h_poc[:, 1:]     
+        # ====== 2) Cone-Hierarchy Loss ======
+        poc_space = h_poc[:, 1:]
         lig_space = h_mol[:, 1:]
-
         poc_idx = []
         for i, (s, e) in enumerate(sample["batch_list"]):
             poc_idx += [i] * (e - s)
         poc_idx = torch.tensor(poc_idx, device=h_poc.device)
 
-        poc_sel = poc_space[poc_idx]         
-
-        dist_mat = L.pairwise_dist(poc_sel, lig_space, curv=κ) 
-        dist     = dist_mat.diagonal()                        
-        phi   = L.oxy_angle(lig_space, poc_space[poc_idx], curv=κ)      
-        omega = L.half_aperture(poc_space[poc_idx], curv=κ)          
-
+        poc_sel = poc_space[poc_idx]
+        dist_mat = L.pairwise_dist(poc_sel, lig_space, curv=κ)  
+        dist     = dist_mat.diagonal() 
+        device = dist.device                        
+        phi   = L.oxy_angle(lig_space, poc_space[poc_idx], curv=κ)       
+        omega = L.half_aperture(poc_space[poc_idx], curv=κ)              
         act_flat = torch.tensor([x for sub in sample["act_list"] for x in sub],
                                 device=h_poc.device, dtype=torch.float32)
         bounds  = self.bounds.to(h_poc.device)
         bucket  = torch.bucketize(act_flat, bounds)                      
         r_k     = self.chl_r0 + bucket.float() * self.chl_dr
         eta_k   = self.chl_eta0 - bucket.float() * self.chl_deta
-
         Nl    = dist.size(0)
         L_rad = F.relu(dist - r_k).sum() / math.sqrt(Nl)
         L_ang = F.relu(phi  - eta_k * omega).sum() / math.sqrt(Nl)
-        loss_chl = self.lambda_rad * L_rad + self.lambda_ang * L_ang
-
-        # =========  Hyperbolic Regularizers ========= #
-
-        m_margin = 0.15                
-        loss_ham = F.relu(phi - eta_k*omega + m_margin).sum() / math.sqrt(Nl)
-
-
-        loss_her = torch.zeros(1, device=device)
-        cnt_her  = 0
+        loss_cone = self.lambda_rad * L_rad + self.lambda_ang * L_ang
+        m_margin = 0.15                                
+        R_ang = F.relu(phi - eta_k*omega + m_margin).sum() / math.sqrt(Nl)
+        R_het = torch.zeros(1, device=device)
+        cnt_het  = 0
         β = 80.5
         offset = 0
         for i_poc, (s, e) in enumerate(sample["batch_list"]):
@@ -111,21 +104,18 @@ class ThreeHybridLoss(UnicoreLoss):
             if L_i < 1:
                 continue
 
-            d_i  = dist[offset:offset + L_i].detach()  
+            d_i  = dist[offset:offset + L_i].detach()   
             rank = (d_i.unsqueeze(0) < d_i.unsqueeze(1)).float().sum(1) + 1
-            w    = torch.exp(-β * (rank - 1) / L_i)     
-
+            w    = torch.exp(-β * (rank - 1) / L_i) 
             logits_row = torch.matmul(poc_space[i_poc:i_poc+1], lig_space.T) * logit_scale
             row_probs  = F.softmax(logits_row[0, s:e], dim=-1)  
-
-            pos_mask   = act_flat[offset:offset + L_i] < 5    
+            pos_mask   = act_flat[offset:offset + L_i] < 5      
             if pos_mask.any():
-                loss_her += -(w[pos_mask] * row_probs[pos_mask].log()).sum() / (w[pos_mask].sum()+1e-9)
-                cnt_her  += 1
+                R_het += -(w[pos_mask] * row_probs[pos_mask].log()).sum() / (w[pos_mask].sum()+1e-9)
+                cnt_het  += 1
             offset += L_i
-        loss_her = loss_her / max(cnt_her, 1)
-
-        loss_reg = self.lambda_ham * loss_ham + self.lambda_her * loss_her
+        R_het = R_het / max(cnt_het, 1)
+        loss_reg = (self.lambda_het * R_het + self.lambda_angu * R_ang)
 
         loss_dict_poc = self.compute_hcc_pair_official_style(
             emb_poc=h_poc,
@@ -140,27 +130,27 @@ class ThreeHybridLoss(UnicoreLoss):
         )
 
         loss_dict_prot = self.compute_hcc_pair_official_style(
-            emb_poc=h_prot,             
+            emb_poc=h_prot,               
             emb_mol=h_mol,
             batch_list=sample["batch_list"],
             act_list=sample["act_list"],
-            uniprot_poc=sample.get("uniprot_list"),    
+            uniprot_poc=sample.get("uniprot_list"),      
             uniprot_mol=sample.get("lig_uniprot_list"),
-            pocket_lig_smiles=sample.get("pocket_lig_smiles"), 
+            pocket_lig_smiles=sample.get("pocket_lig_smiles"),
             lig_smiles=sample["lig"]["smi_name"],
             logit_scale=logit_scale,
         )
 
         loss_hcc     = self.alpha_poc * loss_dict_poc["loss"] + self.alpha_prot * loss_dict_prot["loss"]
-        total_loss = loss_hcc + self.gamma_chl * loss_chl + loss_reg
+        total_loss = loss_hcc + self.gamma_chl * loss_cone + loss_reg
 
         if self.training:
             logging_output = {
                 "loss":             total_loss.data,
                 "sample_size":      B,
-                "loss_ham":  loss_ham.item(),
-                "loss_her":  loss_her.item(),
-                "loss_chl":         loss_chl.item(),
+                "R_ang":  R_ang.item(),
+                "R_het":  R_het.item(),
+                "loss_cone":        loss_cone.item(),
                 "loss_hcc_poc":     loss_dict_poc["loss"].item(),
                 "loss_poc_pocket":  loss_dict_poc["loss_pocket"].item(),
                 "loss_poc_mol":     loss_dict_poc["loss_mol"].item(),
@@ -171,7 +161,7 @@ class ThreeHybridLoss(UnicoreLoss):
                 "loss_prot_rank":   loss_dict_prot["loss_rank"].item(),
             }
         else:
-            sim_masked = loss_dict_poc["sim_masked"].detach()  
+            sim_masked = loss_dict_poc["sim_masked"].detach() 
             sample_size = B
             targets     = torch.arange(sample_size, dtype=torch.long, device=sim_masked.device)
             probs       = F.softmax(sim_masked[:, :sample_size].float(), dim=-1)
@@ -193,11 +183,8 @@ class ThreeHybridLoss(UnicoreLoss):
         pocket_lig_smiles, lig_smiles,
         logit_scale,
     ):
-
         B = emb_poc.size(0)
-
         logits = torch.matmul(emb_poc[:, 1:], emb_mol[:, 1:].T) * logit_scale 
-
         mask = torch.zeros_like(logits, dtype=torch.bool)
         if uniprot_poc is not None and uniprot_mol is not None:
             for i in range(B):
@@ -212,15 +199,13 @@ class ThreeHybridLoss(UnicoreLoss):
                         mask[i, j] = True
 
         minus_inf  = torch.finfo(logits.dtype).min
-        sim_masked = logits.masked_fill(mask, minus_inf)  
-
+        sim_masked = logits.masked_fill(mask, minus_inf)
         loss_mol_list, loss_rank_list = [], []
         for i in range(B):
             s, e   = batch_list[i]
             acts   = act_list[i]
             L_i    = e - s
-            out_i  = sim_masked[i, s:e]  
-
+            out_i  = sim_masked[i, s:e]
             for k in range(s, e):
                 row_mask = torch.full_like(sim_masked[i], minus_inf)
                 row_mask[k] = 0
@@ -228,8 +213,6 @@ class ThreeHybridLoss(UnicoreLoss):
                 if L_i > 1 and acts[k - s] < 5:
                     continue
                 loss_mol_list.append(-lprobs[k] / math.sqrt(L_i))
-
-
             if L_i > 2:
                 for k_rel in range(L_i - 1):
                     m = torch.zeros_like(out_i)
@@ -242,14 +225,13 @@ class ThreeHybridLoss(UnicoreLoss):
 
         loss_mol  = torch.stack(loss_mol_list).sum()   if loss_mol_list  else torch.tensor(0., device=logits.device)
         loss_rank = torch.stack(loss_rank_list).sum()  if loss_rank_list else torch.tensor(0., device=logits.device)
-
         net_T            = sim_masked.T               
         lprobs_pocket_all= F.log_softmax(net_T, dim=-1) 
 
         idx2poc = []
         for i, (s, e) in enumerate(batch_list):
             idx2poc += [i] * (e - s)
-        targets = torch.tensor(idx2poc, dtype=torch.long, device=logits.device) 
+        targets = torch.tensor(idx2poc, dtype=torch.long, device=logits.device)
 
         loss_pocket_list = []
         for i, (s, e) in enumerate(batch_list):
@@ -257,7 +239,7 @@ class ThreeHybridLoss(UnicoreLoss):
             if L_i == 0:
                 continue
             rows      = list(range(s, e))
-            lprobs_sub = lprobs_pocket_all[rows] 
+            lprobs_sub = lprobs_pocket_all[rows]  
             targ_sub   = targets[rows]           
             loss_tmp   = F.nll_loss(lprobs_sub, targ_sub, reduction="none") 
             loss_pocket_list.append(loss_tmp.sum() / math.sqrt(L_i))
@@ -284,12 +266,11 @@ class ThreeHybridLoss(UnicoreLoss):
         metrics.log_scalar("loss", loss_sum / sample_size, sample_size, round=3)
 
         if "train" in split:
-
-            val_hcl = sum(log.get("loss_chl", 0) for log in logging_outputs)
+            val_hcl = sum(log.get("loss_cone", 0) for log in logging_outputs)
             if val_hcl != 0:
-                metrics.log_scalar("loss_chl", val_hcl / sample_size, sample_size, round=3)
+                metrics.log_scalar("loss_cone", val_hcl / sample_size, sample_size, round=3)
             
-            for key in ["loss_ham", "loss_her"]:
+            for key in ["R_ang", "R_het"]:
                 val = sum(log.get(key, 0) for log in logging_outputs)
                 if val != 0:
                     metrics.log_scalar(key, val / sample_size, sample_size, round=3)
@@ -297,7 +278,6 @@ class ThreeHybridLoss(UnicoreLoss):
             val_hcc_poc = sum(log.get("loss_hcc_poc", 0) for log in logging_outputs)
             if val_hcc_poc != 0:
                 metrics.log_scalar("loss_hcc_poc", val_hcc_poc / sample_size, sample_size, round=3)
-
             for key in ["loss_poc_pocket", "loss_poc_mol", "loss_poc_rank"]:
                 val = sum(log.get(key, 0) for log in logging_outputs)
                 if val != 0:
@@ -306,7 +286,6 @@ class ThreeHybridLoss(UnicoreLoss):
             val_hcc_prot = sum(log.get("loss_hcc_prot", 0) for log in logging_outputs)
             if val_hcc_prot != 0:
                 metrics.log_scalar("loss_hcc_prot", val_hcc_prot / sample_size, sample_size, round=3)
-
             for key in ["loss_prot_pocket", "loss_prot_mol", "loss_prot_rank"]:
                 val = sum(log.get(key, 0) for log in logging_outputs)
                 if val != 0:
@@ -320,7 +299,6 @@ class ThreeHybridLoss(UnicoreLoss):
         if valid_set in ["FEP", "TIME", "TYK2", "OOD", "DEMO"]:
             return
 
-
         acc_sum = 0
         prob_list, tgt_list = [], []
         for log in logging_outputs:
@@ -331,13 +309,15 @@ class ThreeHybridLoss(UnicoreLoss):
 
         if len(prob_list) == 0:
             return
+        if len(prob_list) > 1:
+            prob_list = prob_list[:-1]
+            tgt_list  = tgt_list[:-1]
+
         probs   = torch.cat(prob_list, dim=0)
         targets = torch.cat(tgt_list, dim=0)
 
         metrics.log_scalar(f"{split}_acc", acc_sum / sample_size, sample_size, round=3)
         metrics.log_scalar("valid_neg_loss", - (loss_sum / sample_size) / math.log(2), sample_size, round=3)
-
-
         split_method = args.split_method
         if "train" in split:
             for key in ["loss_mol", "loss_pocket", "loss_rank"]:
