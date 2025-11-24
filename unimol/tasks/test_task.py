@@ -4,11 +4,8 @@
 import json
 import logging
 logger = logging.getLogger(__name__)
-# from IPython import embed as debug_embedded
 import logging
 import os
-# from collections.abc import Iterable
-# from sklearn.metrics import roc_auc_score
 from xmlrpc.client import Boolean
 import numpy as np
 import torch
@@ -22,7 +19,7 @@ import unicore.utils
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import accuracy_score, roc_auc_score
 from tqdm import tqdm
-from unimol.losses import lorentz as L         
+from unimol.losses import lorentz as L        
 from unicore import checkpoint_utils
 import unicore
 import os
@@ -45,7 +42,6 @@ from unimol.data import (AffinityDataset, CroppingPocketDataset,
                          RemoveHydrogenPocketDataset, RightPadDatasetCoord,
                          RightPadDatasetCross2D, TTADockingPoseDataset, AffinityTestDataset, AffinityValidDataset,
                          AffinityMolDataset, AffinityPocketDataset, ResamplingDataset)
-# from skchem.metrics import bedroc_score
 from rdkit.ML.Scoring.Scoring import CalcBEDROC, CalcAUC, CalcEnrichment
 from sklearn.metrics import roc_curve
 
@@ -53,7 +49,6 @@ logger = logging.getLogger(__name__)
 import os
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 
 def re_new(y_true, y_score, ratio):
     fp = 0
@@ -378,7 +373,6 @@ class ContrasRankTest(UnicoreTask):
     def load_mols_dataset(self, data_path, atoms, coords, **kwargs):
 
         dataset = LMDBDataset(data_path)
-        # label_dataset = KeyDataset(dataset, "label")
         try:
             label_dataset = KeyDataset(dataset, "label")
             x = label_dataset[0]
@@ -575,57 +569,71 @@ class ContrasRankTest(UnicoreTask):
         return model
 
     def test_pcba_target(self, name, model, seq, **kwargs):
-        """Encode a dataset with the molecule encoder."""
+        import os, json
+        data_path    = f"{self.args.data}/lit_pcba/{name}/mols.lmdb"
+        mol_dataset  = self.load_mols_dataset(data_path, "atoms", "coordinates")
+        bsz          = self.args.batch_size
+        mol_loader   = torch.utils.data.DataLoader(
+            mol_dataset, batch_size=bsz, num_workers=8,
+            collate_fn=mol_dataset.collater)
 
-        # names = "PPARG"
-        data_path = f"{self.args.data}/lit_pcba/" + name + "/mols.lmdb"
-        mol_dataset = self.load_mols_dataset(data_path, "atoms", "coordinates")
-        num_data = len(mol_dataset)
-        bsz = self.args.batch_size
-        # print(num_data//bsz)
-        mol_reps = []
-        mol_names = []
-        labels = []
+        mol_reps, mol_names, labels = [], [], []
+        print(f"[PCBA] target={name}, num_mols={len(mol_dataset)}")
+        with torch.no_grad():
+            for sample in tqdm(mol_loader, desc="Ligand embedding"):
+                sample = unicore.utils.move_to_cuda(sample)
+                emb    = model.mol_forward(**sample["net_input"])
+                mol_reps.append(emb.cpu().numpy())
+                mol_names.extend(sample["smi_name"])
+                labels.extend(sample["target"].cpu().numpy())
+        mol_reps = np.concatenate(mol_reps, axis=0)  
+        labels   = np.array(labels, dtype=np.int32)
 
-        # generate mol data
+        data_path     = f"{self.args.data}/lit_pcba/{name}/pockets.lmdb"
+        pocket_ds     = self.load_pockets_dataset(data_path)
+        pocket_loader = torch.utils.data.DataLoader(
+            pocket_ds, batch_size=bsz, collate_fn=pocket_ds.collater)
 
-        mol_data = torch.utils.data.DataLoader(mol_dataset, batch_size=bsz, num_workers=8,
-                                               collate_fn=mol_dataset.collater)
-        for _, sample in enumerate(tqdm(mol_data)):
-            sample = unicore.utils.move_to_cuda(sample)
-            mol_emb = model.mol_forward(**sample["net_input"])
-            mol_emb = mol_emb.detach().cpu().numpy()
-            mol_reps.append(mol_emb)
-            mol_names.extend(sample["smi_name"])
-            labels.extend(sample["target"].detach().cpu().numpy())
-        mol_reps = np.concatenate(mol_reps, axis=0)
-        labels = np.array(labels, dtype=np.int32)
-        # generate pocket data
-        data_path = f"{self.args.data}/lit_pcba/" + name + "/pockets.lmdb"
-        pocket_dataset = self.load_pockets_dataset(data_path)
-        pocket_data = torch.utils.data.DataLoader(pocket_dataset, batch_size=bsz, collate_fn=pocket_dataset.collater)
-        pocket_reps = []
-        pocket_names = []
+        pocket_reps, pocket_names = [], []
+        with torch.no_grad():
+            for sample in tqdm(pocket_loader, desc="Pocket embedding"):
+                sample      = unicore.utils.move_to_cuda(sample)
+                poc_emb     = model.pocket_forward(
+                    protein_sequences=seq,
+                    **sample["net_input"])
+                pocket_reps.append(poc_emb.cpu().numpy())
+                pocket_names.extend(sample["pocket_name"])
+        pocket_reps = np.concatenate(pocket_reps, axis=0)  # [N_poc, D]
 
-        for _, sample in enumerate(tqdm(pocket_data)):
-            sample = unicore.utils.move_to_cuda(sample)
-            pocket_emb = model.pocket_forward(protein_sequences=seq, **sample["net_input"])
-            pocket_emb = pocket_emb.detach().cpu().numpy()
-            pocket_name = sample["pocket_name"]
-            pocket_names.append(pocket_name)
-            pocket_reps.append(pocket_emb)
-        pocket_reps = np.concatenate(pocket_reps, axis=0)
+        with torch.no_grad():
+            prot_emb = model.protein_forward(protein_sequences=seq)  # [1, D] 或 [B_pr, D]
+        prot_np = prot_emb.cpu().numpy()
+        if prot_np.ndim == 2 and prot_np.shape[0] == 1:
+            prot_reps = np.repeat(prot_np, mol_reps.shape[0], axis=0)
+        else:
+            prot_reps = prot_np  # [B_pr, D]
 
-        os.system(f"mkdir -p {self.args.results_path}/PCBA/{name}")
-        np.save(f"{self.args.results_path}/PCBA/{name}/saved_mols_embed.npy", mol_reps)
-        np.save(f"{self.args.results_path}/PCBA/{name}/saved_target_embed.npy", pocket_reps)
-        np.save(f"{self.args.results_path}/PCBA/{name}/saved_labels.npy", labels)
-        json.dump(pocket_names, open(f"{self.args.results_path}/PCBA/{name}/saved_pocket_names.json", "w"))
+        # pocket–ligand
+        sim_poc    = pocket_reps @ mol_reps.T    # [N_poc, N_lig]
+        poc_scores = sim_poc.max(axis=0)        # [N_lig]
+        # protein–ligand
+        sim_prot    = prot_reps @ mol_reps.T     # [B_pr or 1, N_lig]
+        prot_scores = sim_prot.max(axis=0)      # [N_lig]
+        alpha_poc   = getattr(self.args, "alpha_poc", 1)
+        alpha_prot  = getattr(self.args, "alpha_prot", 0)
+        res_single  = alpha_poc * poc_scores + alpha_prot * prot_scores
 
-        res = pocket_reps @ mol_reps.T
-        res_single = res.max(axis=0)  # Top-1 over pockets
+        out_dir = f"{self.args.results_path}/PCBA/{name}"
+        os.makedirs(out_dir, exist_ok=True)
+        np.save(f"{out_dir}/saved_mols_embed.npy",    mol_reps)
+        np.save(f"{out_dir}/saved_pocket_embed.npy",  pocket_reps)
+        np.save(f"{out_dir}/saved_prot_embed.npy",    prot_reps if 'prot_reps' in locals() else prot_np)
+        np.save(f"{out_dir}/saved_labels.npy",        labels)
+        json.dump(pocket_names, open(f"{out_dir}/saved_pocket_names.json", "w"))
+        json.dump(mol_names,    open(f"{out_dir}/saved_mol_names.json",    "w"))
 
         auc, bedroc, ef_list, re_list = cal_metrics(labels, res_single, 80.5)
+        print(f"[PCBA] {name} AUC={auc:.4f}, BEDROC={bedroc:.4f}, EF={ef_list}")
 
         return auc, bedroc, ef_list, re_list
 
@@ -633,7 +641,7 @@ class ContrasRankTest(UnicoreTask):
     def test_pcba_target_regression(self, name, model, seq, **kwargs):
         """Encode a dataset with the molecule encoder."""
 
-        # names = "PPARG"
+
         data_path = f"{self.args.data}/lit_pcba/" + name + "/mols.lmdb"
         mol_dataset = self.load_mols_dataset(data_path, "atoms", "coordinates")
         num_data = len(mol_dataset)
@@ -732,8 +740,6 @@ class ContrasRankTest(UnicoreTask):
         print("bedroc 50%", np.percentile(bedroc_list, 50))
         print("bedroc 75%", np.percentile(bedroc_list, 75))
         print("bedroc mean", np.mean(bedroc_list))
-        # print(np.median(auc_list))
-        # print(np.median(ef_list))
         for key in ef_list:
             print("ef", key, "25%", np.percentile(ef_list[key], 25))
             print("ef", key, "50%", np.percentile(ef_list[key], 50))
@@ -748,11 +754,7 @@ class ContrasRankTest(UnicoreTask):
         return
 
     def test_dude_target(self, target, model, seq, **kwargs):
-        """
-        DUD-E 单靶点评测：三塔推理（protein + pocket + ligand）。
-        """
         import os
-
         data_path  = f"{self.args.data}/DUD-E/{target}/mols.lmdb"
         mol_dataset = self.load_mols_dataset(data_path, "atoms", "coordinates")
         bsz         = 64
@@ -771,9 +773,8 @@ class ContrasRankTest(UnicoreTask):
                 mol_reps.append(emb.cpu().numpy())
                 mol_names.extend(sample["smi_name"])
                 labels.extend(sample["target"].cpu().numpy())
-        mol_reps = np.concatenate(mol_reps, axis=0)  
+        mol_reps = np.concatenate(mol_reps, axis=0)  # [N_lig, D]
         labels   = np.array(labels, dtype=np.int32)
-
         data_path     = f"{self.args.data}/DUD-E/{target}/pocket.lmdb"
         pocket_ds     = self.load_pockets_dataset(data_path)
         pocket_loader = torch.utils.data.DataLoader(
@@ -789,19 +790,14 @@ class ContrasRankTest(UnicoreTask):
                 pocket_reps.append(poc_emb.cpu().numpy())
         pocket_reps = np.concatenate(pocket_reps, axis=0)  
 
-
         with torch.no_grad():
             prot_emb = model.protein_forward(protein_sequences=seq)  
         prot_np = prot_emb.cpu().numpy()
 
-
-
         sim_poc    = pocket_reps @ mol_reps.T            
-        poc_scores = sim_poc.max(axis=0)              
-
-        sim_prot   = prot_np @ mol_reps.T               
-        prot_scores= sim_prot.max(axis=0)              
-
+        poc_scores = sim_poc.max(axis=0)     
+        sim_prot   = prot_np @ mol_reps.T           
+        prot_scores= sim_prot.max(axis=0)       
         alpha_poc  = getattr(self.args, "alpha_poc", 1)
         alpha_prot = getattr(self.args, "alpha_prot",0)
         res_single = alpha_poc * poc_scores + alpha_prot * prot_scores
@@ -813,7 +809,6 @@ class ContrasRankTest(UnicoreTask):
         np.save(f"{out_dir}/saved_prot_embed.npy",   prot_np)
         np.save(f"{out_dir}/saved_labels.npy",       labels)
         np.save(f"{out_dir}/saved_preds.npy",        res_single)
-
 
         auc, bedroc, ef_list, re_list = cal_metrics(labels, res_single, 80.5)
         print(f"[DUD-E] {target} AUC={auc:.4f}, BEDROC={bedroc:.4f}, EF={ef_list}")
@@ -832,14 +827,14 @@ class ContrasRankTest(UnicoreTask):
         mol_names = []
         labels = []
 
-
+        # generate mol data
         print("begin with target:", target)
         print("number of mol:", len(mol_dataset))
         mol_data = torch.utils.data.DataLoader(mol_dataset, batch_size=bsz, collate_fn=mol_dataset.collater)
 
         act_preds_all = []
 
-
+        # generate mol data
 
         mol_data = torch.utils.data.DataLoader(mol_dataset, batch_size=bsz, collate_fn=mol_dataset.collater,
                                                num_workers=8)
@@ -848,7 +843,7 @@ class ContrasRankTest(UnicoreTask):
             mol_names.extend(mol_sample["smi_name"])
             labels.extend(mol_sample["target"].detach().cpu().numpy())
 
-
+            # generate pocket data
             data_path = f"{self.args.data}/DUD-E/" + target + "/pocket.lmdb"
             pocket_dataset = self.load_pockets_dataset(data_path)
             pocket_data = torch.utils.data.DataLoader(pocket_dataset, batch_size=bsz,
@@ -863,7 +858,7 @@ class ContrasRankTest(UnicoreTask):
                 act_preds.append(pred.detach().cpu().numpy())
                 pocket_names.append(pocket_name)
 
-            act_preds = np.concatenate(act_preds, axis=0) 
+            act_preds = np.concatenate(act_preds, axis=0)  # [num_pocket, num_lig]
             act_preds_all.append(act_preds)
 
         res = np.concatenate(act_preds_all, axis=1)
@@ -932,6 +927,7 @@ class ContrasRankTest(UnicoreTask):
         return
 
     def test_dekois_target(self, target, model, seq, **kwargs):
+
         import os
 
         data_path   = f"{self.args.data}/DEKOIS_2.0x/{target}/{target}_lig.lmdb"
@@ -950,7 +946,7 @@ class ContrasRankTest(UnicoreTask):
                 mol_reps.append(emb.cpu().numpy())
                 mol_names.extend(sample["smi_name"])
                 labels.extend(sample["target"].cpu().numpy())
-        mol_reps = np.concatenate(mol_reps, axis=0)  
+        mol_reps = np.concatenate(mol_reps, axis=0)  # [N_lig, D]
         labels   = np.array(labels, dtype=np.int32)
 
         data_path     = f"{self.args.data}/DEKOIS_2.0x/{target}/{target}_pocket.lmdb"
@@ -966,25 +962,23 @@ class ContrasRankTest(UnicoreTask):
                     protein_sequences=seq,
                     **sample["net_input"])
                 pocket_reps.append(poc_emb.cpu().numpy())
-        pocket_reps = np.concatenate(pocket_reps, axis=0)  
-
+        pocket_reps = np.concatenate(pocket_reps, axis=0)  # [N_poc, D]
 
         with torch.no_grad():
-            prot_emb = model.protein_forward(protein_sequences=seq)  
+            prot_emb = model.protein_forward(protein_sequences=seq)  # [1, D] 或 [B_pr, D]
         prot_np = prot_emb.cpu().numpy()
-
         if prot_np.ndim == 2 and prot_np.shape[0] == 1:
             prot_reps = np.repeat(prot_np, mol_reps.shape[0], axis=0)
         else:
-            prot_reps = prot_np  
+            prot_reps = prot_np  # [B_pr, D]
 
-        sim_poc    = pocket_reps @ mol_reps.T    
-        poc_scores = sim_poc.max(axis=0)           
-
-        sim_prot    = prot_reps @ mol_reps.T        
-        prot_scores = sim_prot.max(axis=0)         
-
-        alpha_poc  = getattr(self.args, "alpha_poc", 1.0)
+        # pocket–ligand
+        sim_poc    = pocket_reps @ mol_reps.T       # [N_poc, N_lig]
+        poc_scores = sim_poc.max(axis=0)           # [N_lig]
+        # protein–ligand
+        sim_prot    = prot_reps @ mol_reps.T        # [B_pr or 1, N_lig]
+        prot_scores = sim_prot.max(axis=0)         # [N_lig]
+        alpha_poc  = getattr(self.args, "alpha_poc", 1)
         alpha_prot = getattr(self.args, "alpha_prot", 0)
         res_single = alpha_poc * poc_scores + alpha_prot * prot_scores
 
@@ -1039,7 +1033,7 @@ class ContrasRankTest(UnicoreTask):
                 act_preds.append(pred.detach().cpu().numpy())
                 pocket_names.append(pocket_name)
 
-            act_preds = np.concatenate(act_preds, axis=0)  
+            act_preds = np.concatenate(act_preds, axis=0)  # [num_pocket, num_lig]
             act_preds_all.append(act_preds)
 
         res = np.concatenate(act_preds_all, axis=1)
@@ -1095,6 +1089,9 @@ class ContrasRankTest(UnicoreTask):
                 ef_list[key].append(ef[key])
             for key in re_list:
                 re_list[key].append(re[key])
+            # except Exception as e:
+            #     print(target, e)
+            #     continue
 
         print("auc mean", np.mean(auc_list))
         print("bedroc mean", np.mean(bedroc_list))
@@ -1120,6 +1117,7 @@ class ContrasRankTest(UnicoreTask):
             sample = unicore.utils.move_to_cuda(sample)
             mol_emb = model.mol_forward(**sample["net_input"])
             mol_emb = mol_emb.detach().cpu().numpy()
+            # print(mol_emb.dtype)
             mol_reps.append(mol_emb)
             mol_smis.extend(sample["smi_name"])
         mol_reps = np.concatenate(mol_reps, axis=0)
@@ -1140,23 +1138,22 @@ class ContrasRankTest(UnicoreTask):
         np.save(f"{self.args.results_path}/saved_target_embed.npy", pocket_reps)
 
 
-
-
-
-    # ======================================================================
     def test_fep_target(self, target, model, label_info, **kwargs):
         import os, json
-        bench_root = "/data/protein/jianhui/hypdrugclip/test_datasets/bench"
+        import numpy as np
+        import pandas as pd
+        import torch
+        from scipy.stats import pearsonr, spearmanr
+        from sklearn.metrics import accuracy_score, roc_auc_score
+
+        bench_root = "/path/bench"
         fep_csv    = f"{bench_root}/fep/{target}/result_dG.csv"
         jacs_fp    = f"{bench_root}/jacs_set/{target}_edges.csv"
         merck_fp   = f"{bench_root}/merck/{target}_edges.csv"
         edge_fp    = jacs_fp if os.path.exists(jacs_fp) else merck_fp
-
         dg_df     = pd.read_csv(fep_csv, dtype=str)
         name2smi  = dict(zip(dg_df["ligand_name"], dg_df["ligand_smiles"]))
         smi2name  = {v: k for k, v in name2smi.items()}
-
-
         mol_ds    = self.load_mols_dataset(
             f"{self.args.data}/FEP/lmdbs/{target}_lig.lmdb",
             "atoms", "coordinates")
@@ -1171,7 +1168,6 @@ class ContrasRankTest(UnicoreTask):
                 mol_reps.append(emb.cpu().numpy())
                 mol_smis.extend(batch["smi_name"])
         mol_reps = np.concatenate(mol_reps, axis=0)
-
         pocket_ds = self.load_pockets_dataset(
             f"{self.args.data}/FEP/lmdbs/{target}.lmdb")
         ploader   = torch.utils.data.DataLoader(
@@ -1187,33 +1183,29 @@ class ContrasRankTest(UnicoreTask):
                 pocket_reps.append(emb.cpu().numpy())
         pocket_reps = np.concatenate(pocket_reps, axis=0)
 
-
         with torch.no_grad():
             prot_emb = model.protein_forward(
                 protein_sequences=label_info["sequence"]
-            ) 
+            )
         prot_np = prot_emb.cpu().numpy()
-
         if prot_np.ndim == 2 and prot_np.shape[0] == 1:
             prot_reps = np.repeat(prot_np, mol_reps.shape[0], axis=0)
         else:
             prot_reps = prot_np
 
         poc_scores  = (pocket_reps @ mol_reps.T).max(axis=0)
-
         prot_scores = (prot_reps   @ mol_reps.T).max(axis=0)
-
         alpha_poc  = getattr(self.args, "alpha_poc", 1)
         alpha_prot = getattr(self.args, "alpha_prot",0)
         pred_scores = alpha_poc * poc_scores + alpha_prot * prot_scores
         smi2score   = dict(zip(mol_smis, pred_scores))
 
+        act_dict   = {lig["smi"]: float(lig["act"]) for lig in label_info["ligands"]}
+        real_dg    = np.array([act_dict[s] for s in mol_smis])
 
-        act_dict = {lig["smi"]: float(lig["act"]) for lig in label_info["ligands"]}
-        real_dg  = np.array([act_dict[s] for s in mol_smis])
-        r2       = max(pearsonr(real_dg, pred_scores).statistic, 0)**2
-        rho      = spearmanr(real_dg, pred_scores).correlation
-
+        r_value, p_value = pearsonr(real_dg, pred_scores)
+        r2 = max(r_value, 0)**2
+        rho = spearmanr(real_dg, pred_scores).correlation
         edges       = pd.read_csv(edge_fp, dtype=str)
         edges["ddG (kcal/mol)"] = edges["ddG (kcal/mol)"].astype(float)
         miss, labels, deltas = [], [], []
@@ -1235,7 +1227,6 @@ class ContrasRankTest(UnicoreTask):
         else:
             acc = auc = float("nan")
 
-
         out_dir = f"{self.args.results_path}/FEP/{target}"
         os.makedirs(out_dir, exist_ok=True)
         np.save(f"{out_dir}/saved_mols_embed.npy",   mol_reps)
@@ -1244,37 +1235,42 @@ class ContrasRankTest(UnicoreTask):
         np.save(f"{out_dir}/saved_labels.npy",      real_dg)
         json.dump([smi2name[s] for s in mol_smis],
                 open(f"{out_dir}/saved_names.json", "w"))
-
-        return r2, rho, acc, auc
-
+        return r2, rho, r_value, acc, auc
 
     def test_fep(self, model, **kwargs):
+        import json
+        import numpy as np
+
         labels_fep   = json.load(open(f"{self.args.data}/FEP/fep_labels.json"))
         ligands_dict = {x["pockets"][0]: x for x in labels_fep}
 
         JACS = {"bace","cdk2","jnk1","mcl1","p38","ptp1b","thrombin","tyk2"}
         groups = {"JACS": [], "MERCK": [], "ALL": []}
 
-        def _nanmean(xs, idx): return float(np.nanmean([x[idx] for x in xs])) if xs else float("nan")
+        def _nanmean(xs, idx):
+            return float(np.nanmean([x[idx] for x in xs])) if xs else float("nan")
 
-        print(f"{'TARGET':<10}{'GRP':<6}{'R2':>8}{'ρ':>8}{'ACC':>8}{'AUC':>8}")
-        print('-'*44)
+        # 增加 r 列
+        print(f"{'TARGET':<10}{'GRP':<6}{'R2':>8}{'ρ':>8}{'r':>8}{'ACC':>8}{'AUC':>8}")
+        print('-'*52)
 
         for tgt, info in ligands_dict.items():
-            r2, sp, acc, auc = self.test_fep_target(tgt, model, info)
+            r2, sp, r, acc, auc = self.test_fep_target(tgt, model, info)
             grp = "JACS" if tgt in JACS else "MERCK"
             for g in [grp, "ALL"]:
-                groups[g].append((r2, sp, acc, auc))
-            print(f"{tgt:<10}{grp:<6}{r2:8.3f}{sp:8.3f}{acc:8.3f}{auc:8.3f}")
+                groups[g].append((r2, sp, r, acc, auc))
+            print(f"{tgt:<10}{grp:<6}{r2:8.5f}{sp:8.5f}{r:8.5f}{acc:8.5f}{auc:8.5f}")
 
         print("\nSUMMARY")
         for g in ["JACS","MERCK","ALL"]:
             vals = groups[g]
             print(f"{g:<6} "
-                f"R2:{_nanmean(vals,0):.3f}  "
-                f"ρ:{_nanmean(vals,1):.3f}  "
-                f"ACC:{_nanmean(vals,2):.3f}  "
-                f"AUC:{_nanmean(vals,3):.3f}")
+                f"R2:{_nanmean(vals,0):.5f}  "
+                f"ρ:{_nanmean(vals,1):.5f}  "
+                f"r:{_nanmean(vals,2):.5f}  "
+                f"ACC:{_nanmean(vals,3):.5f}  "
+                f"AUC:{_nanmean(vals,4):.5f}")
+
 
 
     def test_fep_target_regression(self, target, model, label_info, **kwargs):
@@ -1311,7 +1307,7 @@ class ContrasRankTest(UnicoreTask):
                 print("pred", pred.shape)
                 act_preds.append(pred.detach().cpu().numpy() + 6.)
 
-            act_preds = np.concatenate(act_preds, axis=0) 
+            act_preds = np.concatenate(act_preds, axis=0)  # [num_pocket, num_lig]
             print("act_preds", act_preds.shape)
             act_preds_all.append(act_preds)
 
@@ -1324,7 +1320,6 @@ class ContrasRankTest(UnicoreTask):
         pred_dg = res_single
         from scipy import stats
         corr = stats.pearsonr(real_dg, pred_dg).statistic
-
         os.system(f"mkdir -p {self.args.results_path}/FEP/{target}")
         np.save(f"{self.args.results_path}/FEP/{target}/saved_labels.npy", real_dg)
         np.save(f"{self.args.results_path}/FEP/{target}/saved_preds.npy", pred_dg)
@@ -1346,7 +1341,7 @@ class ContrasRankTest(UnicoreTask):
         if split == "train":
             pdbbind_label = json.load(open(f"{self.args.data}/train_label_pdbbind_seq.json"))
         else:
-            pdbbind_label = json.load(open(f"{self.args.data}/casf_label_seq.json"))
+            pdbbind_label = json.load(open(f"/casf_label_seq.json"))
         for assay in pdbbind_label:
             seq = assay["sequence"]
             pockets = assay["pockets"]
@@ -1359,13 +1354,14 @@ class ContrasRankTest(UnicoreTask):
                                                collate_fn=pdbbind_dataset.collater)
 
         for _, sample in enumerate(tqdm(mol_data)):
+            # compute molecular embedding
             sample = unicore.utils.move_to_cuda(sample)
             pocket_names = sample["pocket_name"]
             seq = [pocket2seq[x] for x in pocket_names]
-            _, pocket_emb, mol_emb = model.forward(**sample["net_input"], protein_sequences=seq)
-            mol_emb = mol_emb.detach().cpu().numpy()
+            mol_emb, pocket_emb, _, _ = model.forward(**sample["net_input"], protein_sequences=seq)
+            mol_emb = mol_emb[0].detach().cpu().numpy()
             mol_reps.append(mol_emb)
-            pocket_emb = pocket_emb.detach().cpu().numpy()
+            pocket_emb = pocket_emb[0].detach().cpu().numpy()
             pocket_reps.append(pocket_emb)
 
             pdbbind_ids += sample["pocket_name"]
@@ -1382,7 +1378,7 @@ class ContrasRankTest(UnicoreTask):
         json.dump(pdbbind_ids, open(f"{write_dir}/{split}_pdbbind_ids.json", "w"))
         json.dump(mol_smis, open(f"{write_dir}/{split}_mol_smis.json", "w"))
 
-    def test_bdb_lig(self, model):
+    def inference_bdb_lig(self, model):
         data_path = f"{self.args.data}/train_lig_all_blend.lmdb"
         bdb_dataset = self.load_mols_dataset(data_path, "atoms", "coordinates")
         num_data = len(bdb_dataset)
@@ -1396,6 +1392,7 @@ class ContrasRankTest(UnicoreTask):
         mol_data = torch.utils.data.DataLoader(bdb_dataset, num_workers=8, batch_size=bsz,
                                                collate_fn=bdb_dataset.collater)
         for _, sample in enumerate(tqdm(mol_data)):
+            # compute molecular embedding
             sample = unicore.utils.move_to_cuda(sample)
             mol_emb = model.mol_forward(**sample["net_input"])
             mol_emb = mol_emb.detach().cpu().numpy()
@@ -1410,7 +1407,7 @@ class ContrasRankTest(UnicoreTask):
         np.save(f"{write_dir}/bdb_mol_reps.npy", mol_reps)
         json.dump(mol_smis, open(f"{write_dir}/bdb_mol_smis.json", "w"))
 
-    def test_bdb_pocket(self, model):
+    def inference_bdb_pocket(self, model):
         data_path = f"{self.args.data}/train_prot_all_blend.lmdb"
         blend_label = json.load(open(f"{self.args.data}/train_label_blend_seq_full.json"))
         pocket_dataset = self.load_pockets_dataset(data_path)
