@@ -15,18 +15,24 @@ from unicore import tasks
 import numpy as np
 from tqdm import tqdm
 import unicore
-
-logging.basicConfig(
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    level=os.environ.get("LOGLEVEL", "INFO").upper(),
-    stream=sys.stdout,
-)
-logger = logging.getLogger("unimol.inference")
-
-# from skchem.metrics import bedroc_score
+import torch
+import argparse
+import numpy as np
+from numpy.dtypes import Float64DType
+import math
 from rdkit.ML.Scoring.Scoring import CalcBEDROC, CalcAUC, CalcEnrichment
 from sklearn.metrics import roc_curve
+
+
+
+torch.serialization.add_safe_globals([
+    argparse.Namespace,
+    np.core.multiarray.scalar,
+    np.dtype,
+    Float64DType,
+])
+
+logger = logging.getLogger("unimol.inference")
 
 
 def main(args):
@@ -43,6 +49,7 @@ def main(args):
     model = task.build_model(args)
     model.load_state_dict(state["model"], strict=False)
 
+    # =================================
     # Move models to GPU
     if use_fp16:
         model.half()
@@ -89,7 +96,6 @@ def main(args):
 
 def cli_main():
     # add args
-
     parser = options.get_validation_parser()
     parser.add_argument("--test-task", type=str, default="DUDE", help="test task",
                         choices=["DUDE", "PCBA", "CASF", "PDB", "FEP", "BDB", "DEKOIS", "ALL", "DEMO"])
