@@ -44,45 +44,6 @@ cd ..
 ```
 We also provide a full Conda environment file (`environment.yml`) for users who encounter dependency issues.
 
-
-## 📦 Dataset & Checkpoints
-
-We provide complete training data, test datasets, and all pretrained / finetuned model checkpoints. Please download them from [this link](https://drive.google.com/drive/folders/1uQNrN3tu0mrI1hhncu2MiKV7AYkqPslN?dmr=1&ec=wgc-drive-globalnav-goto).
-
-### 📂 Datasets
-
-The following datasets are included in the project root directory:
-
-- `data.zip` — Training dataset  
-- `test_datasets.zip` — Testing / benchmark datasets  
-
-After downloading, extract them under the project root:
-
-```
-HypSeek/
- ├── data/
- └── test_datasets/
-```
-
-### 🧩 Model Checkpoints
-
-We release both pre-trained weights and downstream-task finetuned models.
-
-#### 1. `pretrain.zip` — Pre-trained Checkpoints
-
-Contains the pretrained model weights used before downstream finetuning. Extract under:
-
-```
-HypSeek/pretrain/
-```
-
-#### 2. Finetuned Checkpoints (`Checkpoints/` directory)
-
-| File | Purpose |
-|------|---------|
-| `checkpoint_avg_41-50_rk.pt` | **Affinity Ranking** |
-| `checkpoint_avg_41-50_vs.pt` | **Virtual Screening** |
-
 ## 🚀 Quick Start
 
 HypSeek can be directly evaluated using the provided `test.sh` script.
